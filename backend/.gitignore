@@ -1,0 +1,10 @@
+# backend/.gitignore
+
+# Ignore Google Cloud credentials
+gcp_credentials.json
+
+# Ignore Python virtual environment
+venv/
+
+# Ignore Python cache files
+__pycache__/
