@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "121074866516",
+    "project_id": "cerebrus-dc323",
+    "storage_bucket": "cerebrus-dc323.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:121074866516:android:758efd750a15b62cf510c1",
+        "android_client_info": {
+          "package_name": "com.cerebrusproject.client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQV9gQEZhnM1UkXXB4qhrj4UDyH7sg-h4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
