@@ -1,10 +1,11 @@
-// CerebrusProject/client/app/index.tsx
+// CerebrusProject/client/app/index.tsx (Final Hybrid Version)
 
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert, Dimensions,
+  GestureResponderEvent,
   ScrollView,
   StatusBar,
   StyleSheet, Text, TextInput, TouchableOpacity, View
@@ -13,17 +14,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
 // --- Configuration ---
-const SERVER_URL = 'https://2b5e0f5de04f.ngrok-free.app'; // Remember to update this!
+const SERVER_URL = 'https://31396786af3a.ngrok-free.app'; // Remember to update this!
 // ---------------------
 
 const { height, width } = Dimensions.get('window');
 const COLORS = ['#FFFFFF', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#00C7BE', '#30B0C7', '#007AFF', '#AF52DE'];
 const THICKNESSES = [3, 6, 10, 15];
-const BACKGROUND_COLOR = '#111317'; // Canvas background
+const BACKGROUND_COLOR = '#111317';
 const ERASER_COLOR = BACKGROUND_COLOR;
 
 // --- Type Definitions ---
 interface PathData {
+  id?: number; // Messages from server will have an ID
+  clientId?: number; // Temporary ID for local optimistic updates
   path: string;
   color: string;
   thickness: number;
@@ -55,11 +58,9 @@ export default function WhiteboardScreen() {
   const [paths, setPaths] = useState<PathData[]>([]);
   const [currentPath, setCurrentPath] = useState<string[]>([]);
   
-  // Tool State
   const [currentColor, setCurrentColor] = useState<string>('#FFFFFF');
   const [currentThickness, setCurrentThickness] = useState<number>(3);
 
-  // Network Stats State
   const [stats, setStats] = useState<NetworkStats>({
     rtt: 0, jitter: 0, packetsSent: 0, packetsReceived: 0,
     bytesReceived: 0, pollState: 'IDLE'
@@ -78,7 +79,7 @@ export default function WhiteboardScreen() {
       try {
         const pollStartTime = Date.now();
         setStats(prev => ({ ...prev, pollState: 'ACTIVE' }));
-        const response = await fetch(`${SERVER_URL}/poll/${room}/${localLastId}`);
+        const response = await fetch(`${SERVER_URL}/api/poll/${room}/${localLastId}`);
         
         const rtt = Date.now() - pollStartTime;
         rttBuffer.current.push(rtt);
@@ -100,7 +101,19 @@ export default function WhiteboardScreen() {
           const newMessages: PathData[] = data.messages;
           const bytes = JSON.stringify(newMessages).length;
 
-          setPaths((prevPaths) => [...prevPaths, ...newMessages]);
+          setPaths((prevPaths) => {
+            // De-duplication logic:
+            // Filter out any temporary local paths that have now been confirmed by the server.
+            // We match them by their content (path, color, thickness).
+            const latestServerId = newMessages[newMessages.length - 1].id!;
+            const serverPathStrings = new Set(newMessages.map(p => `${p.path}-${p.color}-${p.thickness}`));
+            
+            const filteredOldPaths = prevPaths.filter(p => 
+              !p.clientId || !serverPathStrings.has(`${p.path}-${p.color}-${p.thickness}`)
+            );
+            return [...filteredOldPaths, ...newMessages];
+          });
+          
           setStats(prev => ({
               ...prev,
               packetsReceived: prev.packetsReceived + newMessages.length,
@@ -122,9 +135,7 @@ export default function WhiteboardScreen() {
     } else {
       isPolling.current = false;
     }
-    return () => {
-      isPolling.current = false;
-    };
+    return () => { isPolling.current = false; };
   }, [connected, room]);
 
 
@@ -143,7 +154,12 @@ export default function WhiteboardScreen() {
     setPaths(prev => prev.slice(0, -1));
   };
   
-  const onTouchMove = (event: any) => {
+  const handleTouchStart = () => {
+    // This correctly starts a new, separate line every time.
+    setCurrentPath([]);
+  };
+
+  const onTouchMove = (event: GestureResponderEvent) => {
     if (!connected) return;
     const { locationX, locationY } = event.nativeEvent;
     const newPoint = `${locationX.toFixed(0)},${locationY.toFixed(0)}`;
@@ -152,21 +168,29 @@ export default function WhiteboardScreen() {
 
   const onTouchEnd = async () => {
     if (!connected || currentPath.length === 0) return;
+    
+    // For a single tap (a dot), make it a tiny line so it's visible
+    const isDot = currentPath.length === 1;
+    const finalPath = isDot ? `${currentPath[0]} ${currentPath[0]}` : currentPath.join(' ');
+
     const pathData = {
-      path: currentPath.join(' '),
+      clientId: Date.now(), // Add the temporary client ID
+      path: finalPath,
       color: currentColor,
       thickness: currentThickness,
     };
 
+    // Optimistic Update: Draw locally immediately for a smooth experience
     setPaths((prevPaths) => [...prevPaths, pathData]);
     setCurrentPath([]);
+    
     setStats(prev => ({ ...prev, packetsSent: prev.packetsSent + 1 }));
 
     try {
-      await fetch(`${SERVER_URL}/draw/${room}`, {
+      await fetch(`${SERVER_URL}/api/draw/${room}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pathData),
+        body: JSON.stringify(pathData), // The clientId is not needed by the server
       });
     } catch (error) {
       console.error("Failed to send draw data:", error);
@@ -184,17 +208,16 @@ export default function WhiteboardScreen() {
         </View>
       ) : (
         <>
-          <View onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} style={styles.whiteboardContainer}>
+          <View onTouchStart={handleTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} style={styles.whiteboardContainer}>
             <Svg height="100%" width="100%">
               {paths.map((p, index) => (
-                <Path key={`path_${index}`} d={`M ${p.path}`} stroke={p.color} strokeWidth={p.thickness} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                <Path key={p.clientId || p.id || index} d={`M ${p.path}`} stroke={p.color} strokeWidth={p.thickness} fill="none" strokeLinecap="round" strokeLinejoin="round" />
               ))}
               {currentPath.length > 0 && (
                 <Path d={`M ${currentPath.join(' ')}`} stroke={currentColor} strokeWidth={currentThickness} fill="none" strokeLinecap="round" strokeLinejoin="round" />
               )}
             </Svg>
           </View>
-
           <View style={styles.toolbar}>
             <TouchableOpacity onPress={handleUndo} style={styles.toolButton}>
               <Ionicons name="arrow-undo" size={24} color="white" />
@@ -210,13 +233,11 @@ export default function WhiteboardScreen() {
               ))}
             </View>
           </View>
-
           <View style={styles.colorPalette}>
             {COLORS.map(c => (
               <TouchableOpacity key={c} onPress={() => {Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setCurrentColor(c)}} style={[styles.colorButton, { backgroundColor: c }, currentColor === c && styles.selectedColor]} />
             ))}
           </View>
-
           <View style={styles.statsView}>
             <Text style={styles.statsTitle}>[ LIVE DATA STREAM ]</Text>
             <ScrollView>
@@ -225,14 +246,13 @@ export default function WhiteboardScreen() {
               <StatItem label="SIMULATED RTT" value={stats.rtt.toFixed(0)} unit="ms" />
               <StatItem label="RTT JITTER" value={stats.jitter.toFixed(0)} unit="ms" />
               <StatItem label="PACKETS SENT (TX)" value={stats.packetsSent} unit="pkts" />
-              <StatItem label="PACKETS RCVD (RX)" value={stats.packetsReceived} unit="pkts" />
+              <StatItem label="PACKETS RECEIVED (RX)" value={stats.packetsReceived} unit="pkts" />
               <StatItem label="GOODPUT (RX)" value={(stats.bytesReceived / 1024).toFixed(2)} unit="KB" />
-              <Text style={{ color: "white", fontWeight: "bold" }}>
-    Made by Gaurish Todi, 23BCI0262
-  </Text>
+              <Text style={{fontFamily: 'monospace', fontSize: 16, color: '#FFFFFF', fontWeight: 'bold' }}>
+                         Made By Gaurish Todi, 23BCI0262
+              </Text>
             </ScrollView>
           </View>
-          
         </>
       )}
     </SafeAreaView>
