@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
 // --- Configuration ---
-const SERVER_URL = 'https://31396786af3a.ngrok-free.app'; // Remember to update this!
+const SERVER_URL = 'https://0ec470e76fe0.ngrok-free.app'; // Remember to update this!
 // ---------------------
 
 const { height, width } = Dimensions.get('window');
@@ -40,7 +40,6 @@ interface NetworkStats {
   pollState: 'ACTIVE' | 'IDLE' | 'ERROR';
 }
 
-// --- Helper Component for Stats ---
 const StatItem = ({ label, value, unit }: { label: string, value: string | number, unit: string }) => (
   <View style={styles.statItem}>
     <Text style={styles.statLabel}>{label}</Text>
@@ -102,9 +101,6 @@ export default function WhiteboardScreen() {
           const bytes = JSON.stringify(newMessages).length;
 
           setPaths((prevPaths) => {
-            // De-duplication logic:
-            // Filter out any temporary local paths that have now been confirmed by the server.
-            // We match them by their content (path, color, thickness).
             const latestServerId = newMessages[newMessages.length - 1].id!;
             const serverPathStrings = new Set(newMessages.map(p => `${p.path}-${p.color}-${p.thickness}`));
             
