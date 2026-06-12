@@ -1,4 +1,4 @@
-# 🚀 Cerebrus Protocol: An Advanced, Cloud-Native Real-Time Collaborative Whiteboard
+# 🚀 Cerebrus : An Advanced, Cloud-Native Real-Time Collaborative Whiteboard
 
 ![Status](https://img.shields.io/badge/status-complete-success)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
